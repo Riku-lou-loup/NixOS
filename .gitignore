@@ -1,0 +1,9 @@
+# Hardware-specific (don't share)
+hardware-configuration.nix
+
+# API keys / secrets
+**/.env
+
+# Cached/generated files
+*.pyc
+result
