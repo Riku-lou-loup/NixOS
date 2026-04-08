@@ -1,0 +1,2 @@
+***Prerequisite***
+- NixOS installed
