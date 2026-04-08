@@ -80,6 +80,9 @@
       };
       accel_profile = "flat";
     };
+    cursor = {
+      no_hardware_cursors = true;
+    };
     misc = {
       font_family = "JetBrains Mono";
       disable_hyprland_logo = true;

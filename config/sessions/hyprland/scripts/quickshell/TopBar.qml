@@ -8,7 +8,9 @@ import Quickshell.Services.SystemTray
 
 PanelWindow {
     id: barWindow
-    
+
+    screen: Quickshell.screens.find(s => s.name === "DP-2") ?? Quickshell.screens[0]
+
     anchors {
         top: true
         left: true
@@ -246,12 +248,10 @@ PanelWindow {
         `]
         stdout: StdioCollector {
             onStreamFinished: {
-                let lines = this.text.trim().split("\n");
-                if (lines.length >= 3) {
-                    barWindow.weatherIcon = lines[0];
-                    barWindow.weatherTemp = lines[1];
-                    barWindow.weatherHex = lines[2] || mocha.yellow;
-                }
+                let lines = this.text.split("\n").filter(l => l !== "");
+                barWindow.weatherIcon = lines[0] || "";
+                barWindow.weatherTemp = lines[1] || "--°";
+                barWindow.weatherHex = lines[2] || mocha.yellow;
             }
         }
     }

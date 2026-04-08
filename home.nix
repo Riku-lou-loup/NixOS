@@ -20,7 +20,8 @@ in
   home.packages = with pkgs; [
     adwaita-icon-theme
     adw-gtk3
-  ];
+    uv  
+];
 
   # Set cursor
   home.pointerCursor =

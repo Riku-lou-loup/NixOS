@@ -312,6 +312,17 @@ Item {
     // SCHEDULE DATA
     // -------------------------------------------------------------------------
     property var scheduleData: { "header": "Loading Schedule...", "link": "", "lessons": [] }
+    property string selectedDate: ""  // "YYYY-MM-DD" or "" for today
+
+    function fetchSchedule(dateStr) {
+        window.selectedDate = dateStr;
+        let cmd = dateStr !== ""
+            ? ["bash", window.scriptsDir + "/schedule/schedule_manager.sh", dateStr]
+            : ["bash", window.scriptsDir + "/schedule/schedule_manager.sh"];
+        schedulePoller.command = cmd;
+        schedulePoller.running = false;
+        schedulePoller.running = true;
+    }
 
     Process {
         id: schedulePoller
@@ -328,7 +339,7 @@ Item {
     }
 
     Timer {
-        interval: 600000 
+        interval: 600000
         running: true; repeat: true
         onTriggered: schedulePoller.running = true
     }
@@ -399,14 +410,15 @@ Item {
         calendarModel.clear();
 
         for (let i = firstDay - 1; i >= 0; i--) {
-            calendarModel.append({ dayNum: (daysInPrevMonth - i).toString(), isCurrentMonth: false, isToday: false });
+            calendarModel.append({ dayNum: (daysInPrevMonth - i).toString(), isCurrentMonth: false, isToday: false, dateKey: "" });
         }
         for (let i = 1; i <= daysInMonth; i++) {
-            calendarModel.append({ dayNum: i.toString(), isCurrentMonth: true, isToday: (isRealCurrentMonth && i === todayDate) });
+            let dateKey = targetYear + "-" + String(targetMonth+1).padStart(2,"0") + "-" + String(i).padStart(2,"0");
+            calendarModel.append({ dayNum: i.toString(), isCurrentMonth: true, isToday: (isRealCurrentMonth && i === todayDate), dateKey: dateKey });
         }
         let remaining = 42 - calendarModel.count;
         for (let i = 1; i <= remaining; i++) {
-            calendarModel.append({ dayNum: i.toString(), isCurrentMonth: false, isToday: false });
+            calendarModel.append({ dayNum: i.toString(), isCurrentMonth: false, isToday: false, dateKey: "" });
         }
     }
 
@@ -815,12 +827,14 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 
-                                color: isToday ? window.textAccent : (dayMa.containsMouse ? Qt.alpha(window.surface2, 0.4) : "transparent")
+                                property bool isSelected: isCurrentMonth && (dateKey || "") === window.selectedDate
+
+                                color: isToday ? window.textAccent : (isSelected ? Qt.alpha(window.mauve, 0.35) : (dayMa.containsMouse ? Qt.alpha(window.surface2, 0.4) : "transparent"))
                                 radius: 10
                                 scale: dayMa.containsMouse ? 1.2 : 1.0
-                                border.color: isToday ? window.surface0 : (dayMa.containsMouse ? window.overlay0 : "transparent")
-                                border.width: isToday || dayMa.containsMouse ? 1 : 0
-                                
+                                border.color: isToday ? window.surface0 : (isSelected ? window.mauve : (dayMa.containsMouse ? window.overlay0 : "transparent"))
+                                border.width: isToday || isSelected || dayMa.containsMouse ? 1 : 0
+
                                 Behavior on color { ColorAnimation { duration: 150 } }
                                 Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutBack } }
 
@@ -828,13 +842,23 @@ Item {
                                     anchors.centerIn: parent
                                     text: dayNum
                                     font.family: "JetBrains Mono"
-                                    font.weight: isToday ? Font.Black : Font.Bold
+                                    font.weight: isToday || isSelected ? Font.Black : Font.Bold
                                     font.pixelSize: 14
-                                    color: isToday ? window.base : (isCurrentMonth ? window.text : window.surface0)
+                                    color: isToday ? window.base : (isSelected ? window.mauve : (isCurrentMonth ? window.text : window.surface0))
                                     Behavior on color { ColorAnimation { duration: 200 } }
                                 }
 
-                                MouseArea { id: dayMa; anchors.fill: parent; hoverEnabled: true }
+                                MouseArea {
+                                    id: dayMa; anchors.fill: parent; hoverEnabled: true
+                                    onClicked: {
+                                        if (!isCurrentMonth) return;
+                                        if (window.selectedDate === dateKey) {
+                                            window.fetchSchedule("");  // deselect → back to today
+                                        } else {
+                                            window.fetchSchedule(dateKey);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -939,9 +963,16 @@ Item {
                             font.pixelSize: 16
                             color: window.textAccent
                             Behavior on color { ColorAnimation { duration: 1000 } }
-                            
                             opacity: window.weatherContentOpacity
                             transform: Translate { x: window.weatherContentOffset }
+                        }
+
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: window.weatherData && window.weatherData.city ? " " + window.weatherData.city : ""
+                            font.family: "JetBrains Mono"
+                            font.pixelSize: 13
+                            color: window.overlay1
                         }
                     }
 

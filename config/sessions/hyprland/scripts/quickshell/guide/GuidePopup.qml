@@ -372,14 +372,12 @@ Item {
                                     spacing: 1
                                     Repeater {
                                         model: [
-                                            { l: "i", c: root.red },
-                                            { l: "l", c: root.peach },
-                                            { l: "y", c: root.yellow },
-                                            { l: "a", c: root.green },
-                                            { l: "m", c: root.sapphire },
-                                            { l: "i", c: root.blue },
-                                            { l: "r", c: root.mauve },
-                                            { l: "o", c: root.pink }
+                                            { l: "k", c: root.red },
+                                            { l: "y", c: root.peach },
+                                            { l: "o", c: root.yellow },
+                                            { l: "s", c: root.green },
+                                            { l: "h", c: root.sapphire },
+                                            { l: "o", c: root.mauve }
                                         ]
                                         Text {
                                             text: modelData.l
@@ -416,7 +414,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: Quickshell.execDetached(["xdg-open", "https://github.com/ilyamiro/nixos-configuration"])
+                            onClicked: Quickshell.execDetached(["xdg-open", "https://github.com/Riku-lou-loup/nixos-config"])
                         }
                     }
 

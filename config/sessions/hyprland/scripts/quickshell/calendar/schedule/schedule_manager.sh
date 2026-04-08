@@ -1,37 +1,37 @@
 #!/bin/bash
-
-# Keeping the cache in the same place so we don't break anything else
+# iCloud calendar via ICS - accepts optional date arg YYYY-MM-DD
 CACHE_DIR="$HOME/.cache/quickshell/schedule"
 CACHE_FILE="${CACHE_DIR}/schedule.json"
-CACHE_LIMIT=600 # 1 Hour
-
-# UPDATED: Script Paths now point to your new Hyprland calendar setup
-UPDATER_SCRIPT="$HOME/.config/hypr/scripts/quickshell/calendar/schedule/get_schedule.py"
-SHELL_NIX="$HOME/.config/hypr/scripts/quickshell/calendar/schedule/shell.nix"
+CACHE_TTL=600
+PARSER="$HOME/.config/hypr/scripts/quickshell/calendar/ical_parser.py"
+DATE_ARG="${1:-}"  # optional date YYYY-MM-DD
 
 mkdir -p "$CACHE_DIR"
 
-trigger_update() {
-    # PREVENT OVERLAP: Check if the python script is already running
-    if pgrep -f "python3.*get_schedule.py" > /dev/null; then
-        return # Silently exit if an update is already in progress
+# For a specific date, use a per-date cache file
+if [ -n "$DATE_ARG" ]; then
+    CACHE_FILE="${CACHE_DIR}/schedule_${DATE_ARG}.json"
+fi
+
+run_parser() {
+    if python3 "$PARSER" $DATE_ARG 2>/dev/null > "${CACHE_FILE}.tmp" && [ -s "${CACHE_FILE}.tmp" ]; then
+        mv "${CACHE_FILE}.tmp" "$CACHE_FILE"
+    else
+        rm -f "${CACHE_FILE}.tmp"
     fi
-    
-    nix-shell "$SHELL_NIX" --run "python3 '$UPDATER_SCRIPT'" >/dev/null 2>&1 &
 }
 
 if [ -f "$CACHE_FILE" ]; then
-    cat "$CACHE_FILE"
-    
-    current_time=$(date +%s)
-    file_time=$(stat -c %Y "$CACHE_FILE")
-    age=$((current_time - file_time))
-    
-    if [ "$age" -gt "$CACHE_LIMIT" ]; then
-        trigger_update
+    age=$(( $(date +%s) - $(stat -c %Y "$CACHE_FILE") ))
+    if [ "$age" -gt "$CACHE_TTL" ]; then
+        run_parser &
     fi
+    cat "$CACHE_FILE"
 else
-    # Valid placeholder with "link"
-    echo '{ "header": "Loading...", "lessons": [], "link": "" }'
-    trigger_update
+    run_parser
+    if [ -f "$CACHE_FILE" ]; then
+        cat "$CACHE_FILE"
+    else
+        echo '{ "header": "Loading...", "lessons": [], "link": "" }'
+    fi
 fi

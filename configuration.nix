@@ -50,8 +50,10 @@
     yq-go
     xdg-desktop-portal-gtk
     eww
+    bubblewrap
     swappy
     slurp
+    discord
     mpvpaper
     gnome-tweaks
     pkgsCross.mingwW64.stdenv.cc
@@ -72,7 +74,7 @@
   users.users.kyosho = {
     isNormalUser = true;
     description = "kyosho";
-    extraGroups = [ "networkmanager" "wheel" "video" "adbusers" "libvirtd" ];
+    extraGroups = [ "networkmanager" "wheel" "video" "adbusers" "libvirtd" "docker" ];
     packages = with pkgs; [];
     useDefaultShell = true;
     shell = pkgs.zsh;
@@ -95,6 +97,18 @@
 
   services.logind.settings.Login = {
     HandlePowerKey = "ignore";
+  };
+
+  systemd.services."dp2-wake" = {
+    description = "Wake DP-2 after system resume";
+    wantedBy = [ "post-resume.target" ];
+    after = [ "post-resume.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "kyosho";
+      Environment = "WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/1000";
+      ExecStart = "/bin/sh -c 'sleep 2 && hyprctl dispatch dpms on && sleep 1 && hyprctl dispatch dpms off DP-2 && sleep 1 && hyprctl dispatch dpms on DP-2'";
+    };
   };
 
   # Program configurations
@@ -244,6 +258,7 @@
 
   # Virtualization
   virtualisation.libvirtd.enable = true;
+  virtualisation.docker.enable = true;
   programs.virt-manager.enable = true;
 
   # Bootloader and kernel
