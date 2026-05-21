@@ -154,7 +154,7 @@ Item {
         const escReload = escapeBash(reloadScript);
 
         if (isVideo) {
-            wallpaperCmd = `mpvpaper -o 'loop --no-audio --hwdec=auto --profile=high-quality --video-sync=display-resample --interpolation --tscale=oversample' '*' "$WALL_FILE"`
+            wallpaperCmd = `mpvpaper -o 'loop --no-audio --hwdec=auto --profile=high-quality --video-sync=display-resample --interpolation --tscale=oversample --panscan=1.0' '*' "$WALL_FILE"`
             lockBgCmd = `cp "$THUMB_FILE" /tmp/lock_bg.png`
         } else {
             const randomTransition = window.transitions[Math.floor(Math.random() * window.transitions.length)]

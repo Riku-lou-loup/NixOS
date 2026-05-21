@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import QtQuick.Window
 import Quickshell
 import Quickshell.Io
@@ -86,6 +87,49 @@ Item {
 
     property real animCapacity: 0
     Behavior on animCapacity { NumberAnimation { duration: 1200; easing.type: Easing.OutQuint } }
+
+    // -------------------------------------------------------------------------
+    // IDLE SETTINGS
+    // -------------------------------------------------------------------------
+    property bool showIdleSettings: false
+    property int idleLock: 15        // minutes
+    property int idleScreenOff: 30   // minutes
+    property int idleSleep: 60       // minutes
+
+    readonly property string settingsFile: Quickshell.env("HOME") + "/.config/hypr/idle_settings.json"
+    readonly property string applyScript: Quickshell.env("HOME") + "/.config/hypr/scripts/apply_idle.sh"
+
+    Process {
+        id: idleSettingsLoader
+        command: ["python3", "-c",
+            "import json,os; f='" + window.settingsFile + "'; " +
+            "d=json.load(open(f)) if os.path.exists(f) else {}; " +
+            "print(d.get('lock',900)//60,d.get('screen_off',1800)//60,d.get('sleep',3600)//60)"
+        ]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let parts = this.text.trim().split(" ")
+                if (parts.length === 3) {
+                    window.idleLock = parseInt(parts[0])
+                    window.idleScreenOff = parseInt(parts[1])
+                    window.idleSleep = parseInt(parts[2])
+                }
+            }
+        }
+    }
+
+    Process {
+        id: idleSettingsSaver
+        running: false
+        stdout: StdioCollector { onStreamFinished: applyIdleProcess.running = true }
+    }
+
+    Process {
+        id: applyIdleProcess
+        command: ["bash", window.applyScript]
+        running: false
+    }
     
     onAnimCapacityChanged: batCanvas.requestPaint()
     onBatColorStartChanged: batCanvas.requestPaint()
@@ -223,9 +267,145 @@ Item {
             anchors.fill: parent
             radius: 20
             color: window.base
-            border.color: window.surface0 // Back to neutral so it doesn't clash
+            border.color: window.surface0
             border.width: 1
             clip: true
+
+            // -------------------------------------------------------
+            // IDLE SETTINGS OVERLAY
+            // -------------------------------------------------------
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: window.base
+                visible: window.showIdleSettings
+                z: 100
+                clip: true
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 24
+                    spacing: 20
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Rectangle {
+                            width: 30; height: 30; radius: 15
+                            color: idleBackMa.containsMouse ? window.surface1 : "transparent"
+                            Text { anchors.centerIn: parent; text: ""; font.family: "Iosevka Nerd Font"; color: window.text; font.pixelSize: 14 }
+                            MouseArea { id: idleBackMa; anchors.fill: parent; hoverEnabled: true; onClicked: window.showIdleSettings = false }
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
+                        Text {
+                            text: "IDLE SETTINGS"
+                            font.family: "JetBrains Mono"; font.weight: Font.Black; font.pixelSize: 14
+                            color: window.text; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
+                        }
+                        Item { width: 30 }
+                    }
+
+                    // Lock timeout
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "󰌾  Lock after"; font.family: "Iosevka Nerd Font"; font.pixelSize: 13; color: window.overlay1 }
+                            Item { Layout.fillWidth: true }
+                            Text { text: window.idleLock + " min"; font.family: "JetBrains Mono"; font.weight: Font.Bold; font.pixelSize: 13; color: window.mauve }
+                        }
+                        Slider {
+                            id: lockSlider
+                            Layout.fillWidth: true
+                            from: 1; to: 60; stepSize: 1
+                            value: window.idleLock
+                            onMoved: window.idleLock = value
+                        }
+                    }
+
+                    // Screen off timeout
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "󰍹  Screen off after"; font.family: "Iosevka Nerd Font"; font.pixelSize: 13; color: window.overlay1 }
+                            Item { Layout.fillWidth: true }
+                            Text { text: window.idleScreenOff + " min"; font.family: "JetBrains Mono"; font.weight: Font.Bold; font.pixelSize: 13; color: window.blue }
+                        }
+                        Slider {
+                            id: screenSlider
+                            Layout.fillWidth: true
+                            from: 1; to: 120; stepSize: 1
+                            value: window.idleScreenOff
+                            onMoved: window.idleScreenOff = value
+                        }
+                    }
+
+                    // Sleep timeout
+                    ColumnLayout {
+                        Layout.fillWidth: true; spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "󰒲  Sleep after"; font.family: "Iosevka Nerd Font"; font.pixelSize: 13; color: window.overlay1 }
+                            Item { Layout.fillWidth: true }
+                            Text { text: window.idleSleep + " min"; font.family: "JetBrains Mono"; font.weight: Font.Bold; font.pixelSize: 13; color: window.sapphire }
+                        }
+                        Slider {
+                            id: sleepSlider
+                            Layout.fillWidth: true
+                            from: 5; to: 240; stepSize: 5
+                            value: window.idleSleep
+                            onMoved: window.idleSleep = value
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
+
+                    Rectangle {
+                        Layout.fillWidth: true; height: 40; radius: 10
+                        color: saveMa.containsMouse ? window.green : Qt.alpha(window.green, 0.25)
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Apply"
+                            font.family: "JetBrains Mono"; font.weight: Font.Black; font.pixelSize: 14
+                            color: saveMa.containsMouse ? window.base : window.text
+                        }
+                        MouseArea {
+                            id: saveMa; anchors.fill: parent; hoverEnabled: true
+                            onClicked: {
+                                let s = window.idleLock * 60
+                                let so = window.idleScreenOff * 60
+                                let sl = window.idleSleep * 60
+                                idleSettingsSaver.command = ["python3", "-c",
+                                    "import json; f='" + window.settingsFile + "'; " +
+                                    "json.dump({'lock':" + s + ",'screen_off':" + so + ",'sleep':" + sl + "},open(f,'w'))"
+                                ]
+                                idleSettingsSaver.running = true
+                                window.showIdleSettings = false
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Gear button (left of logout button)
+            Rectangle {
+                anchors.top: parent.top
+                anchors.right: logoutBtn.left
+                anchors.topMargin: 25
+                anchors.rightMargin: 8
+                width: 44; height: 44; radius: 14
+                color: idleSettingsBtnMa.containsMouse ? "#1affffff" : "transparent"
+                border.color: idleSettingsBtnMa.containsMouse ? "#33ffffff" : "transparent"
+                z: 50
+                Text { anchors.centerIn: parent; text: "󰒓"; font.family: "Iosevka Nerd Font"; color: idleSettingsBtnMa.containsMouse ? window.blue : window.overlay0; font.pixelSize: 18 }
+                MouseArea {
+                    id: idleSettingsBtnMa; anchors.fill: parent; hoverEnabled: true
+                    onClicked: { window.showIdleSettings = true; idleSettingsLoader.running = true }
+                }
+                Behavior on color { ColorAnimation { duration: 150 } }
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+            }
 
             // Rotating Background Blobs
             Rectangle {
@@ -855,7 +1035,7 @@ Item {
                     Repeater {
                         model: ListModel {
                             ListElement { cmd: "bash ~/.config/hypr/scripts/lock.sh"; icon: ""; baseColor: "mauve"; weight: 1.0 }
-                            ListElement { cmd: "bash ~/.config/hypr/scripts/lock.sh & systemctl suspend"; icon: "ᶻ 𝗓 𐰁"; baseColor: "blue"; weight: 1.0 }
+                            ListElement { cmd: "hyprctl dispatch dpms off && loginctl lock-session && sleep 0.5 && systemctl suspend"; icon: "ᶻ 𝗓 𐰁"; baseColor: "blue"; weight: 1.0 }
                             ListElement { cmd: "systemctl reboot"; icon: "󰑓"; baseColor: "yellow"; weight: 2.5 }
                             ListElement { cmd: "systemctl poweroff -i"; icon: ""; baseColor: "red"; weight: 3.5 }
                         }

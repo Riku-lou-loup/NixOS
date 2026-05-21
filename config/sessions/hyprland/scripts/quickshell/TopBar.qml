@@ -9,7 +9,20 @@ import Quickshell.Services.SystemTray
 PanelWindow {
     id: barWindow
 
-    screen: Quickshell.screens.find(s => s.name === "DP-2") ?? Quickshell.screens[0]
+    property string preferredMonitor: "eDP-2"
+    Process {
+        id: topbarMonitorConfig
+        command: ["bash", "-c", "cat ~/.config/hypr/topbar_monitor.txt 2>/dev/null || echo 'eDP-2'"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let mon = this.text.trim()
+                if (mon !== "") barWindow.preferredMonitor = mon
+            }
+        }
+    }
+
+    screen: Quickshell.screens.find(s => s.name === barWindow.preferredMonitor) ?? Quickshell.screens[0]
 
     anchors {
         top: true

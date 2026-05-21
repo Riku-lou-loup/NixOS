@@ -4,6 +4,11 @@
 
 { config, pkgs, lib, ... }:
 
+let
+  unstable = import (fetchTarball "https://nixos.org/channels/nixos-unstable/nixexprs.tar.xz") {
+    config = config.nixpkgs.config;
+  };
+in
 {
   # Imports
   imports =
@@ -16,6 +21,12 @@
 
   # System packages
   environment.systemPackages = with pkgs; [
+    unstable.awscli2
+    cloudflared
+    framac
+    clang
+    gcc
+    ghidra
     wget
     taskwarrior3
     file
@@ -26,9 +37,35 @@
     neovim
     fzf
     direnv
-    python311
+    (python312.withPackages (ps: with ps; [
+      jupyter
+      notebook
+      ipykernel
+      ipywidgets
+      numpy
+      pandas
+      matplotlib
+      scipy
+      scikit-learn
+      seaborn
+      pillow
+      tqdm
+      plotly
+      xgboost
+      torch
+      torchvision
+    ]))
     ffmpeg
-    (wrapFirefox (pkgs.firefox-unwrapped.override { pipewireSupport = true; }) {})
+    (wrapFirefox (pkgs.firefox-unwrapped.override { pipewireSupport = true; }) {
+      extraPolicies = {
+        DisableFirefoxStudies = true;
+      };
+      extraPrefsFiles = [(pkgs.writeText "firefox-vaapi-prefs" ''
+        pref("media.ffmpeg.vaapi.enabled", true);
+        pref("gfx.webrender.all", true);
+        pref("media.hardware-video-decoding.force-enabled", true);
+      '')];
+    })
     telegram-desktop
     kitty
     libreoffice-qt
@@ -41,6 +78,7 @@
     papers
     fastfetch
     jetbrains.idea-community
+    jetbrains.pycharm-professional
     quickshell
     gnome-shell-extensions
     grim
@@ -51,6 +89,7 @@
     xdg-desktop-portal-gtk
     eww
     bubblewrap
+    gnumake
     swappy
     slurp
     discord
@@ -64,8 +103,14 @@
     jdk8
     steam-run
     nodejs
-    vscode
+    vscode-fhs
+    remmina
+    sqlite
+    hypridle
+    plantuml
+    texlive.combined.scheme-medium
     gnome-control-center
+    socat
   ];
 
   environment.pathsToLink = [ "/share/gsettings-schemas" ];
@@ -99,18 +144,6 @@
     HandlePowerKey = "ignore";
   };
 
-  systemd.services."dp2-wake" = {
-    description = "Wake DP-2 after system resume";
-    wantedBy = [ "post-resume.target" ];
-    after = [ "post-resume.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = "kyosho";
-      Environment = "WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/1000";
-      ExecStart = "/bin/sh -c 'sleep 2 && hyprctl dispatch dpms on && sleep 1 && hyprctl dispatch dpms off DP-2 && sleep 1 && hyprctl dispatch dpms on DP-2'";
-    };
-  };
-
   # Program configurations
   programs.zsh.enable = true;
   programs.adb.enable = true;
@@ -139,6 +172,19 @@
 
   # Hyprland
   programs.hyprland.enable = true;
+
+  # nix-ld: allow running dynamically linked binaries (e.g. CTF/pwn binaries)
+  programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [
+    stdenv.cc.cc
+    zlib
+    openssl
+    glibc
+    libgcc
+    glib
+    libsecret
+    icu
+  ];
 
   # XDG Portals
   xdg.portal = {
@@ -289,7 +335,7 @@
 
   hardware.nvidia = {
     modesetting.enable = true;
-    powerManagement.enable = false;
+    powerManagement.enable = true;
     powerManagement.finegrained = true;
     open = false;
     nvidiaSettings = true;

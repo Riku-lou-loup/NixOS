@@ -907,12 +907,158 @@ Item {
                         }
                     }
                     
-                    Item { Layout.fillHeight: true } 
+                    Item { Layout.fillHeight: true }
+
+                    // --- SCALE SECTION ---
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 10
+                        Layout.rightMargin: 10
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text {
+                                text: "Scale"
+                                font.family: "JetBrains Mono"; font.weight: Font.Black; font.pixelSize: 13
+                                color: window.overlay0
+                            }
+                            Item { Layout.fillWidth: true }
+                            Text {
+                                text: {
+                                    if (monitorsModel.count === 0) return "1.0×"
+                                    return monitorsModel.get(window.activeEditIndex).sysScale + "×"
+                                }
+                                font.family: "JetBrains Mono"; font.weight: Font.Bold; font.pixelSize: 13
+                                color: window.selectedResAccent
+                                Behavior on color { ColorAnimation { duration: 200 } }
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+
+                            Repeater {
+                                model: [
+                                    { val: 1.0,  label: "100%" },
+                                    { val: 1.25, label: "125%" },
+                                    { val: 1.5,  label: "150%" },
+                                    { val: 1.75, label: "175%" },
+                                    { val: 2.0,  label: "200%" }
+                                ]
+
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 36; radius: 8
+
+                                    property bool isSel: {
+                                        if (monitorsModel.count === 0) return false
+                                        return Math.abs(monitorsModel.get(window.activeEditIndex).sysScale - modelData.val) < 0.01
+                                    }
+
+                                    color: isSel ? Qt.alpha(window.selectedResAccent, 0.15) : (scaleMa.containsMouse ? window.surface0 : window.mantle)
+                                    border.color: isSel ? window.selectedResAccent : (scaleMa.containsMouse ? window.surface1 : "transparent")
+                                    border.width: isSel ? 2 : 1
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                                    scale: scaleMa.pressed ? 0.94 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutSine } }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: modelData.label
+                                        font.family: "JetBrains Mono"; font.weight: isSel ? Font.Black : Font.Bold; font.pixelSize: 12
+                                        color: isSel ? window.selectedResAccent : (scaleMa.containsMouse ? window.text : window.overlay0)
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+
+                                    MouseArea {
+                                        id: scaleMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (monitorsModel.count > 0)
+                                                monitorsModel.setProperty(window.activeEditIndex, "sysScale", modelData.val)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Item { Layout.preferredHeight: 8 }
                 }
             }
 
             // ==========================================
-            // FLOATING APPLY BUTTON 
+            // FLOATING TOPBAR BUTTON
+            // ==========================================
+            Item {
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.margins: 30
+                width: 170
+                height: 50
+                opacity: window.introProgress
+                transform: Translate { y: window.uiYOffset }
+
+                property bool tbHovered: false
+                property bool tbPressed: false
+
+                Rectangle {
+                    id: topbarBtn
+                    anchors.fill: parent
+                    radius: 25
+                    color: parent.tbHovered ? window.surface1 : window.surface0
+                    border.color: parent.tbHovered ? window.mauve : window.surface2
+                    border.width: 1
+                    Behavior on color { ColorAnimation { duration: 200 } }
+                    Behavior on border.color { ColorAnimation { duration: 200 } }
+                    scale: parent.tbPressed ? 0.94 : (parent.tbHovered ? 1.04 : 1.0)
+                    Behavior on scale { NumberAnimation { duration: 300; easing.type: Easing.OutBack } }
+
+                    RowLayout {
+                        anchors.centerIn: parent
+                        spacing: 8
+                        Text {
+                            font.family: "Iosevka Nerd Font"; font.pixelSize: 18
+                            color: topbarBtn.parent.tbHovered ? window.mauve : window.overlay0
+                            text: "󰍹"
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                        }
+                        Text {
+                            font.family: "JetBrains Mono"; font.weight: Font.Black; font.pixelSize: 13
+                            color: topbarBtn.parent.tbHovered ? window.text : window.overlay0
+                            text: "Topbar here"
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                        }
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: parent.tbHovered = true
+                    onExited: parent.tbHovered = false
+                    onPressed: parent.tbPressed = true
+                    onReleased: parent.tbPressed = false
+                    onCanceled: parent.tbPressed = false
+                    onClicked: {
+                        if (monitorsModel.count === 0) return
+                        let monName = monitorsModel.get(window.activeEditIndex).name
+                        Quickshell.execDetached(["bash", "-c",
+                            "echo '" + monName + "' > ~/.config/hypr/topbar_monitor.txt && " +
+                            "pkill -f 'quickshell.*TopBar.qml' 2>/dev/null; sleep 1; " +
+                            "quickshell -p ~/.config/hypr/scripts/quickshell/TopBar.qml &"
+                        ])
+                        Quickshell.execDetached(["notify-send", "Topbar", "Moving topbar to " + monName])
+                    }
+                }
+            }
+
+            // ==========================================
+            // FLOATING APPLY BUTTON
             // ==========================================
             Item {
                 id: applyButtonContainer
@@ -1021,6 +1167,10 @@ Item {
                             let monitorStr = mon.name + "," + mon.resW + "x" + mon.resH + "@" + mon.rate + ",auto," + mon.sysScale;
                             Quickshell.execDetached(["notify-send", "Display Update", "Applied: " + mon.resW + "x" + mon.resH + " @ " + mon.rate + "Hz"]);
                             Quickshell.execDetached(["sh", "-c", "hyprctl keyword monitor " + monitorStr]);
+                            let saveMon = [{name: mon.name, resW: mon.resW, resH: mon.resH, rate: mon.rate, x: 0, y: 0, sysScale: mon.sysScale}];
+                            Quickshell.execDetached(["python3", "-c",
+                                "import json,os; json.dump(" + JSON.stringify(saveMon) + ", open(os.path.expanduser('~/.config/hypr/monitor_settings.json'),'w'))"
+                            ]);
                         } else {
                             let rects = [];
                             for (let i = 0; i < monitorsModel.count; i++) {
@@ -1073,7 +1223,19 @@ Item {
                             let fullCommand = "hyprctl --batch '" + batchCmds.join(" ; ") + "'";
                             Quickshell.execDetached(["sh", "-c", fullCommand]);
                             Quickshell.execDetached(["notify-send", "Display Update", "Applied layout for: " + summaryString]);
+                            let savePayload = [];
+                            for (let si = 0; si < rects.length; si++) {
+                                let sr = rects[si];
+                                savePayload.push({name: sr.name, resW: sr.resW, resH: sr.resH, rate: sr.rate, x: sr.x, y: sr.y, sysScale: sr.sysScale});
+                            }
+                            Quickshell.execDetached(["python3", "-c",
+                                "import json,os; json.dump(" + JSON.stringify(savePayload) + ", open(os.path.expanduser('~/.config/hypr/monitor_settings.json'),'w'))"
+                            ]);
                         }
+
+                        // swww doesn't automatically redraw when output geometry changes (e.g. scale change).
+                        // Restore the wallpaper after Hyprland finishes reconfiguring the output.
+                        Quickshell.execDetached(["bash", "-c", "sleep 0.8 && swww restore 2>/dev/null"]);
                     }
                 }
             }

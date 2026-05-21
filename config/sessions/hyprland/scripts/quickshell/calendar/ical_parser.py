@@ -32,24 +32,22 @@ def load_env():
                     env[k.strip()] = v.strip()
     return env
 
-def fetch_ics(url):
-    # Use cached ICS if fresh enough
-    if os.path.exists(ICAL_CACHE):
-        age = (datetime.now().timestamp() - os.path.getmtime(ICAL_CACHE))
+def fetch_ics(url, cache_file):
+    if os.path.exists(cache_file):
+        age = (datetime.now().timestamp() - os.path.getmtime(cache_file))
         if age < CACHE_TTL:
-            with open(ICAL_CACHE) as f:
+            with open(cache_file) as f:
                 return f.read()
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as r:
             data = r.read().decode("utf-8", errors="replace")
-        with open(ICAL_CACHE, "w") as f:
+        with open(cache_file, "w") as f:
             f.write(data)
         return data
-    except Exception as e:
-        # Return cached even if stale on failure
-        if os.path.exists(ICAL_CACHE):
-            with open(ICAL_CACHE) as f:
+    except Exception:
+        if os.path.exists(cache_file):
+            with open(cache_file) as f:
                 return f.read()
         return None
 
@@ -215,7 +213,9 @@ def build_lessons(today_events):
     for i, ev in enumerate(timed_events):
         duration = max(ev["end_epoch"] - ev["start_epoch"], 900)  # min 15min
         width = max(int((duration / total_seconds) * TOTAL_WIDTH), 80)
-        is_compact = width < 120
+        # The QML hides time/location for compact cards. A 90-minute class on a sparse
+        # day can still be readable around ~110px, so keep the compact cutoff lower.
+        is_compact = width < 100
         
         lessons.append({
             "type": "class",
@@ -252,16 +252,55 @@ def build_lessons(today_events):
 
 def main():
     env = load_env()
-    url = env.get("ICAL_URL", "")
-    
-    if not url:
+
+    # Collect all ICAL_URL, ICAL_URL_2, ICAL_URL_3, ... entries
+    urls = []
+    if env.get("ICAL_URL"):
+        urls.append(env["ICAL_URL"])
+    i = 2
+    while env.get(f"ICAL_URL_{i}"):
+        urls.append(env[f"ICAL_URL_{i}"])
+        i += 1
+
+    if not urls:
         print(json.dumps({"header": "No Calendar URL", "lessons": [], "link": ""}))
         return
-    
-    ics_text = fetch_ics(url)
-    if not ics_text:
+
+    # Fetch and merge all calendars
+    all_ics = []
+    for idx, url in enumerate(urls):
+        cache_file = os.path.join(CACHE_DIR, f"calendar_{idx}.ics")
+        text = fetch_ics(url, cache_file)
+        if text:
+            all_ics.append(text)
+
+    if not all_ics:
         print(json.dumps({"header": "Offline", "lessons": [], "link": ""}))
         return
+
+    # Merge by concatenating VEVENT blocks from all calendars
+    def extract_vevents(ics_text):
+        events = []
+        in_event = False
+        block = []
+        for line in ics_text.splitlines():
+            if line.strip() == "BEGIN:VEVENT":
+                in_event = True
+                block = [line]
+            elif line.strip() == "END:VEVENT":
+                block.append(line)
+                events.append("\n".join(block))
+                in_event = False
+                block = []
+            elif in_event:
+                block.append(line)
+        return events
+
+    merged_events = []
+    for ics_text in all_ics:
+        merged_events.extend(extract_vevents(ics_text))
+
+    ics_text = "BEGIN:VCALENDAR\n" + "\n".join(merged_events) + "\nEND:VCALENDAR"
     
     # Detect local timezone from system
     local_tz = "Europe/Paris"

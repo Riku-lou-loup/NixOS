@@ -314,6 +314,23 @@ Item {
     property var scheduleData: { "header": "Loading Schedule...", "link": "", "lessons": [] }
     property string selectedDate: ""  // "YYYY-MM-DD" or "" for today
 
+    property bool showCalendarSettings: false
+    property var calendarUrls: []
+
+    Process {
+        id: calUrlsPoller
+        command: ["python3", window.scriptsDir + "/calendar_urls.py", "list"]
+        running: false
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let txt = this.text.trim()
+                if (txt !== "") {
+                    try { window.calendarUrls = JSON.parse(txt) } catch(e) {}
+                }
+            }
+        }
+    }
+
     function fetchSchedule(dateStr) {
         window.selectedDate = dateStr;
         let cmd = dateStr !== ""
@@ -787,9 +804,20 @@ Item {
                             width: 32; height: 32; radius: 16
                             color: diaryMa.containsMouse ? window.surface1 : "transparent"
                             Text { anchors.centerIn: parent; text: "+"; font.family: "Iosevka Nerd Font"; color: diaryMa.containsMouse ? window.mauve : window.text; font.pixelSize: 32 }
-                            MouseArea { 
-                                id: diaryMa; anchors.fill: parent; hoverEnabled: true; 
-                                onClicked: Quickshell.execDetached(["bash", window.scriptsDir + "/diary_manager.sh"]) 
+                            MouseArea {
+                                id: diaryMa; anchors.fill: parent; hoverEnabled: true;
+                                onClicked: Quickshell.execDetached(["bash", window.scriptsDir + "/diary_manager.sh"])
+                            }
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
+
+                        Rectangle {
+                            width: 32; height: 32; radius: 16
+                            color: calSettingsMa.containsMouse ? window.surface1 : "transparent"
+                            Text { anchors.centerIn: parent; text: "󰒓"; font.family: "Iosevka Nerd Font"; color: calSettingsMa.containsMouse ? window.blue : window.text; font.pixelSize: 15 }
+                            MouseArea {
+                                id: calSettingsMa; anchors.fill: parent; hoverEnabled: true
+                                onClicked: { window.showCalendarSettings = true; calUrlsPoller.running = true }
                             }
                             Behavior on color { ColorAnimation { duration: 150 } }
                         }
@@ -862,6 +890,137 @@ Item {
                             }
                         }
                     }
+                }
+            }
+
+            // =======================================================
+            // CALENDAR SETTINGS OVERLAY
+            // =======================================================
+            Rectangle {
+                anchors.fill: calendarRect
+                radius: calendarRect.radius
+                color: window.base
+                visible: window.showCalendarSettings
+                z: 50
+                clip: true
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 20
+                    spacing: 10
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Rectangle {
+                            width: 28; height: 28; radius: 14
+                            color: backMa.containsMouse ? window.surface1 : "transparent"
+                            Text { anchors.centerIn: parent; text: ""; font.family: "Iosevka Nerd Font"; color: window.text; font.pixelSize: 14 }
+                            MouseArea { id: backMa; anchors.fill: parent; hoverEnabled: true; onClicked: window.showCalendarSettings = false }
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                        }
+                        Text {
+                            text: "CALENDARS"
+                            font.family: "JetBrains Mono"; font.weight: Font.Black; font.pixelSize: 14
+                            color: window.text; Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter
+                        }
+                        Item { width: 28 }
+                    }
+
+                    ListView {
+                        id: urlListView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: window.calendarUrls
+                        clip: true
+                        spacing: 6
+
+                        delegate: Rectangle {
+                            width: urlListView.width
+                            height: 48; radius: 8
+                            color: window.surface0
+                            border.color: window.surface1; border.width: 1
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 8
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: modelData.url
+                                    font.family: "JetBrains Mono"; font.pixelSize: 10
+                                    color: window.subtext1
+                                    elide: Text.ElideMiddle
+                                }
+                                Rectangle {
+                                    width: 28; height: 28; radius: 14
+                                    color: delMa.containsMouse ? Qt.alpha(window.red, 0.2) : "transparent"
+                                    Text { anchors.centerIn: parent; text: ""; font.family: "Iosevka Nerd Font"; color: window.red; font.pixelSize: 13 }
+                                    MouseArea {
+                                        id: delMa; anchors.fill: parent; hoverEnabled: true
+                                        onClicked: {
+                                            removeUrlProcess.command = ["python3", window.scriptsDir + "/calendar_urls.py", "remove", modelData.key]
+                                            removeUrlProcess.running = true
+                                        }
+                                    }
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true; height: 36; radius: 8
+                        color: window.surface0
+                        border.color: urlInput.activeFocus ? window.blue : window.surface1; border.width: 1
+                        Behavior on border.color { ColorAnimation { duration: 150 } }
+
+                        TextInput {
+                            id: urlInput
+                            anchors.fill: parent; anchors.margins: 10
+                            font.family: "JetBrains Mono"; font.pixelSize: 11
+                            color: window.text
+                            verticalAlignment: TextInput.AlignVCenter
+                            clip: true
+                            Text {
+                                anchors.fill: parent
+                                text: "Paste calendar URL..."
+                                font: urlInput.font; color: window.overlay0
+                                verticalAlignment: Text.AlignVCenter
+                                visible: !urlInput.text && !urlInput.activeFocus
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true; height: 34; radius: 8
+                        color: addUrlMa.containsMouse ? window.blue : Qt.alpha(window.blue, 0.25)
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Add Calendar"
+                            font.family: "JetBrains Mono"; font.weight: Font.Bold; font.pixelSize: 13
+                            color: addUrlMa.containsMouse ? window.base : window.text
+                        }
+                        MouseArea {
+                            id: addUrlMa; anchors.fill: parent; hoverEnabled: true
+                            onClicked: {
+                                if (urlInput.text.trim() !== "") {
+                                    addUrlProcess.command = ["python3", window.scriptsDir + "/calendar_urls.py", "add", urlInput.text.trim()]
+                                    addUrlProcess.running = true
+                                    urlInput.text = ""
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Process {
+                    id: addUrlProcess
+                    stdout: StdioCollector { onStreamFinished: calUrlsPoller.running = true }
+                }
+                Process {
+                    id: removeUrlProcess
+                    stdout: StdioCollector { onStreamFinished: calUrlsPoller.running = true }
                 }
             }
 
