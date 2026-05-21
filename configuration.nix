@@ -134,7 +134,7 @@ in
       commands = [
         {
           command = "ALL";
-          options = [ "NOPASSWD" ];
+          options = [];
         }
       ];
     }
@@ -254,7 +254,13 @@ in
   services.blueman.enable = true;
 
   services.printing.enable = true;
-  services.openssh.enable = true;
+  services.openssh = {
+    enable = true;
+    settings = {
+      PermitRootLogin = "no";
+      PasswordAuthentication = true;  # set to false once authorized_keys is configured
+    };
+  };
   services.power-profiles-daemon.enable = true;
 
   # Nix settings
